@@ -1,5 +1,5 @@
 {
-  "name": "opencode-agent-pulse",
+  "name": "@arcevico/opencode-agent-pulse",
   "version": "0.1.0",
   "description": "Agent effectiveness analytics for OpenCode — health scores, tool performance, agent comparison, and prompt change tracking. Not just token counts.",
   "main": "src/index.ts",
@@ -17,7 +17,7 @@
     "health-score",
     "tool-performance"
   ],
-  "author": "",
+  "author": "Diogo Cunha Moreira",
   "license": "MIT",
   "repository": {
     "type": "git",
