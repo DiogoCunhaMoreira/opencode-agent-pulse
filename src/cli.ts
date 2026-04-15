@@ -6,7 +6,7 @@ import { join } from "node:path"
 import { printStats } from "./stats"
 import { startDashboard } from "./dashboard"
 
-const dbPath = join(homedir(), ".local", "share", "opencode", "agent-quality.db")
+const dbPath = join(homedir(), ".local", "share", "opencode", "agent-pulse.db")
 
 if (!existsSync(dbPath)) {
   console.error("No data yet. Run some OpenCode sessions first.")

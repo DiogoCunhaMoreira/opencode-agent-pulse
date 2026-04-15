@@ -17,13 +17,13 @@ Add to your `opencode.json`:
 
 ```json
 {
-  "plugin": ["opencode-agent-quality"]
+  "plugin": ["opencode-agent-pulse"]
 }
 ```
 
 Restart OpenCode. Done.
 
-Data is stored locally at `~/.local/share/opencode/agent-quality.db`.
+Data is stored locally at `~/.local/share/opencode/agent-pulse.db`.
 
 ## What gets tracked
 

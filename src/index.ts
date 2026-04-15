@@ -56,7 +56,7 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
   const home = homedir()
   const dbDir = join(home, ".local", "share", "opencode")
   mkdirSync(dbDir, { recursive: true })
-  const dbPath = join(dbDir, "agent-quality.db")
+  const dbPath = join(dbDir, "agent-pulse.db")
 
   // Open DB and create schema
   const db = new Database(dbPath)
@@ -80,7 +80,7 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
         q.insertAgentChange.run(c.agent, c.hash, c.path, Date.now(), c.content.slice(0, 5000))
         ctx.client.app.log({
           body: {
-            service: "agent-quality",
+            service: "agent-pulse",
             level: "info",
             message: `Agent config changed: ${c.agent} → ${c.hash}`,
           },
@@ -122,7 +122,7 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
 
   await ctx.client.app.log({
     body: {
-      service: "agent-quality",
+      service: "agent-pulse",
       level: "info",
       message: `Agent Quality Analytics ready. DB: ${dbPath}`,
     },
@@ -257,7 +257,7 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
       } catch (err) {
         ctx.client.app.log({
           body: {
-            service: "agent-quality",
+            service: "agent-pulse",
             level: "error",
             message: `Error: ${(err as Error).message}`,
           },

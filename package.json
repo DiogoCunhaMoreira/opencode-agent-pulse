@@ -1,5 +1,5 @@
 {
-  "name": "opencode-agent-quality",
+  "name": "opencode-agent-pulse",
   "version": "0.1.0",
   "description": "Agent effectiveness analytics for OpenCode — health scores, tool performance, agent comparison, and prompt change tracking. Not just token counts.",
   "main": "src/index.ts",
@@ -10,7 +10,7 @@
   "keywords": [
     "opencode",
     "opencode-plugin",
-    "agent-quality",
+    "agent-pulse",
     "agent-metrics",
     "analytics",
     "observability",

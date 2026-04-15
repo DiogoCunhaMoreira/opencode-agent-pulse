@@ -1,5 +1,5 @@
 /**
- * Database schema and prepared queries for agent-quality metrics.
+ * Database schema and prepared queries for agent-pulse metrics.
  *
  * Uses bun:sqlite directly — zero external dependencies.
  * All tables are created idempotently (IF NOT EXISTS).
