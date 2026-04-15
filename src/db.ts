@@ -192,6 +192,33 @@ export function createQueries(db: Database) {
       ORDER BY avg_health DESC
     `),
 
+    healthBreakdownByAgent: db.prepare(`
+      SELECT agent,
+             COUNT(*) AS sessions,
+             ROUND(AVG(health_score), 1) AS avg_health,
+             ROUND(AVG(
+               CASE WHEN has_error = 0 THEN 30
+                    WHEN json_array_length(error_messages) = 1 THEN 10
+                    ELSE 0 END
+             ), 1) AS avg_error_score,
+             ROUND(AVG(CASE WHEN was_reverted = 0 THEN 25 ELSE 0 END), 1) AS avg_revert_score,
+             ROUND(AVG(MAX(0, 15 - retries * 5)), 1) AS avg_retry_score,
+             ROUND(AVG(
+               CASE WHEN tool_calls = 0 THEN 15
+                    ELSE ROUND((tool_calls - tool_errors) * 15.0 / tool_calls) END
+             ), 1) AS avg_tool_score,
+             ROUND(AVG(
+               CASE WHEN step_count >= 2 AND step_count <= 15 THEN 15
+                    WHEN step_count = 1 THEN 10
+                    WHEN step_count > 15 AND step_count <= 30 THEN 8
+                    ELSE 0 END
+             ), 1) AS avg_step_score
+      FROM sessions
+      WHERE start_time > ?
+      GROUP BY agent
+      ORDER BY avg_health DESC
+    `),
+
     healthByModel: db.prepare(`
       SELECT model, provider,
              COUNT(*)              AS sessions,
@@ -240,7 +267,7 @@ export function createQueries(db: Database) {
     `),
 
     recentAgentChanges: db.prepare(`
-      SELECT id, agent, config_hash, file_path, changed_at
+      SELECT id, agent, config_hash, file_path, changed_at, snapshot
       FROM agent_changes
       ORDER BY changed_at DESC
       LIMIT ?
