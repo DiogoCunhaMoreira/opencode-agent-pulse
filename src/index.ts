@@ -51,26 +51,23 @@ function tracker(id: string): SessionTracker {
 
 // ── Plugin ──────────────────────────────────────────────────────
 
-export const AgentQualityPlugin: Plugin = async (ctx) => {
-  // Resolve DB path
+const AgentPulsePlugin: Plugin = async (ctx) => {
+
   const home = homedir()
   const dbDir = join(home, ".local", "share", "opencode")
   mkdirSync(dbDir, { recursive: true })
-  const dbPath = join(dbDir, "agent-pulse.db")
+  const dbPath = join(dbDir, "agent-quality.db")
 
-  // Open DB and create schema
   const db = new Database(dbPath)
   createTables(db)
   const q = createQueries(db)
 
-  // Load last known agent hashes from DB
   const allAgents = db.prepare(`
     SELECT agent, config_hash FROM agent_changes
     WHERE id IN (SELECT MAX(id) FROM agent_changes GROUP BY agent)
   `).all() as Array<{ agent: string; config_hash: string }>
   initFromDB(allAgents)
 
-  // Initial agent config scan
   const projectDir = ctx.directory || ctx.worktree || process.cwd()
   function checkAgentChanges() {
     try {
@@ -80,7 +77,7 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
         q.insertAgentChange.run(c.agent, c.hash, c.path, Date.now(), c.content.slice(0, 5000))
         ctx.client.app.log({
           body: {
-            service: "agent-pulse",
+            service: "agent-quality",
             level: "info",
             message: `Agent config changed: ${c.agent} → ${c.hash}`,
           },
@@ -90,7 +87,6 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
   }
   checkAgentChanges()
 
-  // Flush a session to DB
   function flush(sessionID: string, endTime?: number) {
     const t = active.get(sessionID)
     if (!t) return
@@ -122,7 +118,7 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
 
   await ctx.client.app.log({
     body: {
-      service: "agent-pulse",
+      service: "agent-quality",
       level: "info",
       message: `Agent Quality Analytics ready. DB: ${dbPath}`,
     },
@@ -257,7 +253,7 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
       } catch (err) {
         ctx.client.app.log({
           body: {
-            service: "agent-pulse",
+            service: "agent-quality",
             level: "error",
             message: `Error: ${(err as Error).message}`,
           },
@@ -266,3 +262,6 @@ export const AgentQualityPlugin: Plugin = async (ctx) => {
     },
   }
 }
+
+export const plugin = AgentPulsePlugin
+export default plugin
