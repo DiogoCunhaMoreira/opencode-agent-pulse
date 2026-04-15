@@ -5,83 +5,76 @@ export function printStats(db: Database) {
   const q = createQueries(db)
   const since = Date.now() - 7 * 24 * 60 * 60 * 1000
 
-  const agents = q.healthBreakdownByAgent.all(since) as any[]
-  const models = q.healthByModel.all(since) as any[]
+  const agents = q.healthByAgent.all(since) as any[]
   const tools = q.toolStats.all(since) as any[]
   const worst = q.worstSessions.all(since, 5) as any[]
-  const changes = q.recentAgentChanges.all(10) as any[]
+  const agentsWithChanges = q.agentsWithChanges.all() as any[]
 
-  console.log("\n=== Health by Agent (last 7 days) ===")
+  console.log("\n=== Agents (last 7 days) ===")
   if (agents.length) {
     console.table(agents.map(a => ({
       agent: a.agent || "(default)",
-      health: `${a.avg_health}/100`,
+      health: a.avg_health,
       sessions: a.sessions,
-      "errors /30": a.avg_error_score,
-      "reverts /25": a.avg_revert_score,
-      "retries /15": a.avg_retry_score,
-      "tools /15": a.avg_tool_score,
-      "steps /15": a.avg_step_score,
+      "avg cost": `$${a.avg_cost}`,
+      "avg tokens": Math.round(a.avg_tokens),
+      "error %": `${a.error_rate}%`,
     })))
   } else console.log("  No data")
 
-  console.log("\n=== Health by Model ===")
-  if (models.length) console.table(models)
-  else console.log("  No data")
+  // Evolution per agent — one table per agent showing version history
+  if (agentsWithChanges.length) {
+    for (const { agent } of agentsWithChanges) {
+      const versions = q.agentEvolution.all(agent) as any[]
+      if (!versions.length) continue
 
-  console.log("\n=== Tool Performance ===")
+      console.log(`\n=== Evolution: ${agent} ===`)
+      console.table(versions.map((v, i) => {
+        const prev = i > 0 ? versions[i - 1] : null
+        const healthDelta = prev && v.sessions && prev.sessions
+          ? ` (${v.avg_health - prev.avg_health > 0 ? "+" : ""}${(v.avg_health - prev.avg_health).toFixed(1)})`
+          : ""
+        const tokenDelta = prev && v.sessions && prev.sessions
+          ? ` (${v.avg_tokens - prev.avg_tokens > 0 ? "+" : ""}${Math.round(v.avg_tokens - prev.avg_tokens)})`
+          : ""
+        const costDelta = prev && v.sessions && prev.sessions
+          ? ` (${v.avg_cost - prev.avg_cost > 0 ? "+" : ""}${(v.avg_cost - prev.avg_cost).toFixed(4)})`
+          : ""
+
+        return {
+          version: v.config_hash,
+          changed: new Date(v.changed_at).toLocaleString(),
+          sessions: v.sessions,
+          health: v.sessions ? `${v.avg_health}${healthDelta}` : "-",
+          "avg cost": v.sessions ? `$${v.avg_cost}${costDelta}` : "-",
+          "avg tokens": v.sessions ? `${Math.round(v.avg_tokens)}${tokenDelta}` : "-",
+          "error %": v.sessions ? `${v.error_rate}%` : "-",
+        }
+      }))
+    }
+  }
+
+  console.log("\n=== Tools (last 7 days) ===")
   if (tools.length) {
     console.table(tools.map(t => ({
       tool: t.tool_name,
       calls: t.calls,
       errors: t.errors,
-      "error %": t.calls > 0 ? ((t.errors / t.calls) * 100).toFixed(1) + "%" : "0%",
+      "error %": t.calls > 0 ? `${((t.errors / t.calls) * 100).toFixed(1)}%` : "0%",
       "avg ms": t.avg_duration_ms,
     })))
   } else console.log("  No data")
 
-  console.log("\n=== Worst Sessions ===")
+  console.log("\n=== Worst Sessions (last 7 days) ===")
   if (worst.length) {
-    console.table(worst.map(s => {
-      const flags: string[] = []
-      if (s.has_error) flags.push("err")
-      if (s.was_reverted) flags.push("revert")
-      if (s.retries > 0) flags.push(`${s.retries}x retry`)
-      return {
-        agent: s.agent || "-",
-        model: s.model || "-",
-        health: s.health_score,
-        flags: flags.join(", ") || "-",
-        cost: `$${s.total_cost.toFixed(4)}`,
-        tools: `${s.tool_calls} (${s.tool_errors} err)`,
-        prompt: (s.user_prompt || "").slice(0, 60),
-      }
-    }))
+    console.table(worst.map(s => ({
+      agent: s.agent || "-",
+      health: s.health_score,
+      cost: `$${s.total_cost.toFixed(4)}`,
+      errors: s.tool_errors,
+      prompt: (s.user_prompt || "").slice(0, 60),
+    })))
   } else console.log("  No data")
-
-  console.log("\n=== Agent Config Changes ===")
-  if (changes.length) {
-    console.table(changes.map(c => {
-      const impact = q.healthAroundChange.all(c.id, c.agent) as any[]
-      const before = impact.find((r: any) => r.period === "before")
-      const after = impact.find((r: any) => r.period === "after")
-
-      const healthBefore = before ? before.avg_health : null
-      const healthAfter = after ? after.avg_health : null
-      let healthImpact = "-"
-      if (healthBefore != null && healthAfter != null) {
-        const d = healthAfter - healthBefore
-        healthImpact = `${healthBefore} -> ${healthAfter} (${d > 0 ? "+" : ""}${d.toFixed(1)})`
-      }
-
-      return {
-        agent: c.agent,
-        changed: new Date(c.changed_at).toLocaleString(),
-        "health impact": healthImpact,
-        "sessions (before/after)": `${before ? before.sessions : 0} / ${after ? after.sessions : 0}`,
-      }
-    }))
-  } else console.log("  No changes tracked")
 
   console.log()
 }

@@ -182,37 +182,9 @@ export function createQueries(db: Database) {
       SELECT agent,
              COUNT(*)              AS sessions,
              ROUND(AVG(health_score), 1) AS avg_health,
-             SUM(tool_calls)       AS total_tools,
-             SUM(tool_errors)      AS total_tool_errors,
-             ROUND(SUM(total_cost), 4)   AS total_cost,
-             ROUND(AVG(total_cost), 4)   AS avg_cost
-      FROM sessions
-      WHERE start_time > ?
-      GROUP BY agent
-      ORDER BY avg_health DESC
-    `),
-
-    healthBreakdownByAgent: db.prepare(`
-      SELECT agent,
-             COUNT(*) AS sessions,
-             ROUND(AVG(health_score), 1) AS avg_health,
-             ROUND(AVG(
-               CASE WHEN has_error = 0 THEN 30
-                    WHEN json_array_length(error_messages) = 1 THEN 10
-                    ELSE 0 END
-             ), 1) AS avg_error_score,
-             ROUND(AVG(CASE WHEN was_reverted = 0 THEN 25 ELSE 0 END), 1) AS avg_revert_score,
-             ROUND(AVG(MAX(0, 15 - retries * 5)), 1) AS avg_retry_score,
-             ROUND(AVG(
-               CASE WHEN tool_calls = 0 THEN 15
-                    ELSE ROUND((tool_calls - tool_errors) * 15.0 / tool_calls) END
-             ), 1) AS avg_tool_score,
-             ROUND(AVG(
-               CASE WHEN step_count >= 2 AND step_count <= 15 THEN 15
-                    WHEN step_count = 1 THEN 10
-                    WHEN step_count > 15 AND step_count <= 30 THEN 8
-                    ELSE 0 END
-             ), 1) AS avg_step_score
+             ROUND(AVG(total_cost), 4)   AS avg_cost,
+             ROUND(AVG(input_tokens + output_tokens), 0) AS avg_tokens,
+             ROUND(AVG(tool_errors * 100.0 / MAX(tool_calls, 1)), 1) AS error_rate
       FROM sessions
       WHERE start_time > ?
       GROUP BY agent
@@ -251,26 +223,26 @@ export function createQueries(db: Database) {
       LIMIT ?
     `),
 
-    // Compare health before/after an agent config change
-    healthAroundChange: db.prepare(`
-      SELECT
-        CASE WHEN s.start_time < ac.changed_at THEN 'before' ELSE 'after' END AS period,
-        COUNT(*)                       AS sessions,
-        ROUND(AVG(s.health_score), 1)  AS avg_health,
-        ROUND(AVG(s.total_cost), 4)    AS avg_cost,
-        ROUND(AVG(s.tool_errors * 1.0 / MAX(s.tool_calls, 1)), 3) AS avg_tool_error_rate
-      FROM sessions s
-      JOIN agent_changes ac ON ac.agent = s.agent AND ac.id = ?
-      WHERE s.agent = ?
-        AND s.start_time BETWEEN ac.changed_at - 604800000 AND ac.changed_at + 604800000
-      GROUP BY period
+    // Metrics grouped by agent config version
+    agentEvolution: db.prepare(`
+      SELECT ac.agent,
+             ac.config_hash,
+             ac.changed_at,
+             COUNT(s.session_id)    AS sessions,
+             ROUND(AVG(s.health_score), 1) AS avg_health,
+             ROUND(AVG(s.total_cost), 4)   AS avg_cost,
+             ROUND(AVG(s.input_tokens + s.output_tokens), 0) AS avg_tokens,
+             ROUND(AVG(s.tool_errors * 100.0 / MAX(s.tool_calls, 1)), 1) AS error_rate
+      FROM agent_changes ac
+      LEFT JOIN sessions s ON s.agent = ac.agent AND s.agent_config_hash = ac.config_hash
+      WHERE ac.agent = ?
+      GROUP BY ac.config_hash
+      ORDER BY ac.changed_at ASC
     `),
 
-    recentAgentChanges: db.prepare(`
-      SELECT id, agent, config_hash, file_path, changed_at, snapshot
-      FROM agent_changes
-      ORDER BY changed_at DESC
-      LIMIT ?
+    // All distinct agents that have config changes
+    agentsWithChanges: db.prepare(`
+      SELECT DISTINCT agent FROM agent_changes ORDER BY agent
     `),
   }
 }
