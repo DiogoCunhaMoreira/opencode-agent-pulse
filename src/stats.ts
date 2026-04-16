@@ -7,7 +7,6 @@ export function printStats(db: Database) {
 
   const agents = q.healthByAgent.all(since) as any[]
   const tools = q.toolStats.all(since) as any[]
-  const worst = q.worstSessions.all(since, 5) as any[]
   const agentsWithChanges = q.agentsWithChanges.all() as any[]
 
   console.log("\n=== Agents (last 7 days) ===")
@@ -54,25 +53,16 @@ export function printStats(db: Database) {
     }
   }
 
-  console.log("\n=== Tools (last 7 days) ===")
+  console.log("\n=== Tools by Agent Version (last 7 days) ===")
   if (tools.length) {
     console.table(tools.map(t => ({
+      agent: t.agent || "(default)",
+      version: t.config_hash || "-",
       tool: t.tool_name,
       calls: t.calls,
       errors: t.errors,
       "error %": t.calls > 0 ? `${((t.errors / t.calls) * 100).toFixed(1)}%` : "0%",
       "avg ms": t.avg_duration_ms,
-    })))
-  } else console.log("  No data")
-
-  console.log("\n=== Worst Sessions (last 7 days) ===")
-  if (worst.length) {
-    console.table(worst.map(s => ({
-      agent: s.agent || "-",
-      health: s.health_score,
-      cost: `$${s.total_cost.toFixed(4)}`,
-      errors: s.tool_errors,
-      prompt: (s.user_prompt || "").slice(0, 60),
     })))
   } else console.log("  No data")
 
