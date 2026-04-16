@@ -6,8 +6,6 @@
  */
 import { Database } from "bun:sqlite"
 
-// ── Schema ──────────────────────────────────────────────────────
-
 export function createTables(db: Database) {
   db.run("PRAGMA journal_mode=WAL")
 
@@ -95,7 +93,6 @@ export function createTables(db: Database) {
     )
   `)
 
-  // ── NEW: agent config change log ──
   db.run(`
     CREATE TABLE IF NOT EXISTS agent_changes (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,7 +105,6 @@ export function createTables(db: Database) {
     )
   `)
 
-  // Indexes
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_start       ON sessions(start_time)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_agent       ON sessions(agent)`)
   db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_model       ON sessions(model)`)
@@ -121,7 +117,6 @@ export function createTables(db: Database) {
   db.run(`CREATE INDEX IF NOT EXISTS idx_agent_changes_hash   ON agent_changes(config_hash)`)
 }
 
-// ── Prepared queries ────────────────────────────────────────────
 
 export function createQueries(db: Database) {
   return {
@@ -159,10 +154,8 @@ export function createQueries(db: Database) {
     markReverted: db.prepare(`
       UPDATE sessions
       SET was_reverted = 1, health_score = MAX(0, health_score - 25)
-      WHERE session_id = ?
+      WHERE session_id LIKE ? || ':%'
     `),
-
-    // ── Agent change tracking ──
 
     getLatestAgentHash: db.prepare(`
       SELECT config_hash FROM agent_changes
@@ -176,11 +169,9 @@ export function createQueries(db: Database) {
       VALUES (?,?,?,?,?)
     `),
 
-    // ── Useful analytics queries ──
-
     healthByAgent: db.prepare(`
       SELECT agent,
-             COUNT(*)              AS sessions,
+             COUNT(DISTINCT substr(session_id, 1, instr(session_id, ':') - 1)) AS sessions,
              ROUND(AVG(health_score), 1) AS avg_health,
              ROUND(AVG(total_cost), 4)   AS avg_cost,
              ROUND(AVG(input_tokens + output_tokens), 0) AS avg_tokens,
@@ -203,14 +194,17 @@ export function createQueries(db: Database) {
     `),
 
     toolStats: db.prepare(`
-      SELECT tool_name,
+      SELECT s.agent,
+             s.agent_config_hash AS config_hash,
+             te.tool_name,
              COUNT(*)                                    AS calls,
-             SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS errors,
-             ROUND(AVG(duration_ms), 0)                  AS avg_duration_ms
-      FROM tool_executions
-      WHERE session_id IN (SELECT session_id FROM sessions WHERE start_time > ?)
-      GROUP BY tool_name
-      ORDER BY calls DESC
+             SUM(CASE WHEN te.status='error' THEN 1 ELSE 0 END) AS errors,
+             ROUND(AVG(te.duration_ms), 0)               AS avg_duration_ms
+      FROM tool_executions te
+      JOIN sessions s ON s.session_id = te.session_id
+      WHERE s.start_time > ?
+      GROUP BY s.agent, s.agent_config_hash, te.tool_name
+      ORDER BY s.agent, s.agent_config_hash, calls DESC
     `),
 
     worstSessions: db.prepare(`
@@ -223,12 +217,11 @@ export function createQueries(db: Database) {
       LIMIT ?
     `),
 
-    // Metrics grouped by agent config version
     agentEvolution: db.prepare(`
       SELECT ac.agent,
              ac.config_hash,
              ac.changed_at,
-             COUNT(s.session_id)    AS sessions,
+             COUNT(DISTINCT CASE WHEN s.session_id IS NOT NULL THEN substr(s.session_id, 1, instr(s.session_id, ':') - 1) END) AS sessions,
              ROUND(AVG(s.health_score), 1) AS avg_health,
              ROUND(AVG(s.total_cost), 4)   AS avg_cost,
              ROUND(AVG(s.input_tokens + s.output_tokens), 0) AS avg_tokens,
@@ -240,7 +233,6 @@ export function createQueries(db: Database) {
       ORDER BY ac.changed_at ASC
     `),
 
-    // All distinct agents that have config changes
     agentsWithChanges: db.prepare(`
       SELECT DISTINCT agent FROM agent_changes ORDER BY agent
     `),
