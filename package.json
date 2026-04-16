@@ -1,6 +1,6 @@
 {
   "name": "@arcevico/opencode-agent-pulse",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Agent effectiveness analytics for OpenCode — health scores, tool performance, agent comparison, and prompt change tracking. Not just token counts.",
   "main": "src/index.ts",
   "types": "src/index.ts",
