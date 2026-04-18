@@ -4,7 +4,7 @@ Agent effectiveness analytics for [OpenCode](https://opencode.ai).
 
 ## What it does
 
-Every other OpenCode analytics tool counts tokens and dollars. This one answers the questions that actually matter:
+This OpenCode analytics tool answers the questions that matter:
 
 - **Is my agent working?** → Health score (0-100) per session
 - **Which tools keep failing?** → Tool success rates and latency, grouped by agent version
